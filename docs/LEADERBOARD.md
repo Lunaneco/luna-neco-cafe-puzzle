@@ -53,7 +53,7 @@ RANKING_API=http://127.0.0.1:8787 npm start
 参考: [D1の導入](https://developers.cloudflare.com/d1/get-started/)、[Workersの無料枠](https://developers.cloudflare.com/workers/platform/limits/)、[D1の制限](https://developers.cloudflare.com/d1/platform/limits/)、[レート制限](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)。
 
 
-## 安全設定（公開前に実装済み）
+## 安全設定（本番適用済み）
 
 - 本番の通信はHTTPS。書き込みにはゲームのOriginを必須とし、CORSのプリフライトもメソッドとヘッダーを限定。CORSは認証ではないため、署名付きプレイ検証とアクセス制限を併用。
 - D1の接続、64文字の署名鍵、閲覧・書き込みの制限が欠けていれば503で停止。制限障害時にも制限なしで処理を続けない。
@@ -64,4 +64,6 @@ RANKING_API=http://127.0.0.1:8787 npm start
 - APIクライアントはCookieや認証情報を付けず、リダイレクト先への記録送信も拒否。
 - 有料プランへの変更、支払情報の追加、グローバルAPIキーの作成は行わない。
 
-**現時点ではCloudflare CLIが未認証のため、以上はリポジトリ内の設定・コードであり、本番アカウントには未反映です。** アカウントの二要素認証や既存権限も未確認です。認証完了後にD1作成、秘密鍵の設定、公開と実環境での確認を行います。
+2026-09-12にCloudflareへ適用しました。APIは `https://luna-neco-ranking.luna-neco-cafe-puzzle.workers.dev`、ゲームは既存のGitHub Pagesで配信します。D1は専用データベースを使用し、署名鍵はWorker Secretsだけに保存しています。
+
+46件の自動テストと、実APIでのプリフライト、記録保存、別リクエストからの取得、再送時の重複防止、改変スコア・無関係なOriginの拒否を確認しました。検証用記録は確認後に取り除き、過去の端末内記録は自動で送信しません。

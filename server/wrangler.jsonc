@@ -1,5 +1,6 @@
 {
   "name": "luna-neco-ranking",
+  "account_id": "12cf67f3e593ba096e3d48965651f8b9",
   "main": "worker.js",
   "compatibility_date": "2026-09-01",
   "workers_dev": true,
@@ -18,7 +19,7 @@
     {
       "binding": "DB",
       "database_name": "luna-neco-ranking",
-      "database_id": "REPLACE_WITH_DATABASE_ID",
+      "database_id": "7b6bed8f-9d68-41f2-bedd-d49f3c663ef4",
       "migrations_dir": "migrations"
     }
   ],

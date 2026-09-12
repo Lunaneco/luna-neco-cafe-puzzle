@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
+import '../src/round.js';
 const source = readFileSync(new URL('../src/game.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const translations = html.match(/<script id="ui-texts" type="application\/json">([\s\S]*?)<\/script>/)[1];
-function boot({ storageBlocked = false, saved = {}, language = 'ja', search = '', webAudio = false, deferredMedia = false } = {}) {
+function boot({ storageBlocked = false, saved = {}, language = 'ja', search = '', webAudio = false, deferredMedia = false, api = {} } = {}) {
   const nodes = new Map();
   const stored = new Map(Object.entries(saved));
   const listeners = { document: new Map(), window: new Map() };
@@ -24,7 +25,8 @@ function boot({ storageBlocked = false, saved = {}, language = 'ja', search = ''
     replaceChildren() { this.children = []; },
     setAttribute(key, value) { this.attrs[key] = value; },
     addEventListener(event, callback) { this.handlers[event] = callback; },
-    click() { this.handlers.click?.({}); },
+    click() { return this.handlers.click?.({}); },
+    focus() {},
   });
   const document = {
     hidden: false,
@@ -49,6 +51,12 @@ function boot({ storageBlocked = false, saved = {}, language = 'ja', search = ''
     get(target, key) { return target[key] ?? (() => {}); },
   });
   const context = vm.createContext({
+    LunaRound: globalThis.LunaRound,
+    LunaLeaderboard: class {
+      list() { return api.list ? api.list() : Promise.resolve({ entries: [] }); }
+      begin() { return api.begin ? api.begin() : Promise.resolve({ seed: 123, token: 'test' }); }
+      submit(body) { return api.submit ? api.submit(body) : Promise.resolve({ entries: [{ id: 'r1', rank: 1, name: body.name, score: body.score }], entry: { id: 'r1', rank: 1, name: body.name, score: body.score } }); }
+    },
     document, URLSearchParams, location: { search }, navigator: { language },
     window: {
       addEventListener: addListener('window'),
@@ -197,42 +205,99 @@ test('out-of-bounds, ready-state, and finished-state taps are ignored', () => {
   assert.equal(g.run('score'), 0);
 });
 
-test('rankings persist, sort descending, and retain only five names', () => {
-  const g = boot();
-  g.run("[100,600,200,300,500,400].forEach((s,i)=>saveScore('player'+i,s))");
-  assert.deepEqual(JSON.parse(g.run('JSON.stringify(loadRanking().map(e=>e.score))')), [600,500,400,300,200]);
-  const next = boot({ saved: Object.fromEntries(g.stored) });
-  assert.equal(next.run('loadRanking()[0].name'), 'player1');
+test('rankings come from the shared service and ignore old device rankings', async () => {
+  const g = boot({ saved: { luna_neco_ranking_v1: '[{"name":"old","score":9999}]' },
+    api: { list: async () => ({ entries: [{ id: 'a', name: '全国の猫', score: 500, rank: 1 }] }) } });
+  await g.run("refreshRanking('result-ranking')");
+  const rows = g.nodes.get('result-ranking').children;
+  assert.equal(rows.length, 2);
+  assert.equal(rows[1].children[1].textContent, '全国の猫');
 });
 
-test('names render as literal text and duplicate submission is ignored', () => {
-  const g = boot(); board(g);
-  g.run("score=100; showResult('msg.timeup')");
+test('names render as literal text and concurrent duplicate submission is ignored', async () => {
+  let sends = 0;
+  const g = boot({ api: { submit: async body => {
+    sends++;
+    return { entries: [{ id: 'a', rank: 1, name: body.name, score: body.score }], entry: { rank: 1, name: body.name } };
+  } } });
+  g.run("startGame({seed:1,token:'test'}); score=100; showResult('msg.timeup')");
   g.nodes.get('player-name-input').value = '<b>猫</b>';
-  g.nodes.get('submit-score-btn').click();
-  g.nodes.get('submit-score-btn').click();
-  assert.equal(g.run('loadRanking().length'), 1);
-  const row = g.nodes.get('result-ranking').children[1];
-  assert.equal(row.children[1].textContent, '<b>猫</b>');
+  await Promise.all([g.nodes.get('submit-score-btn').click(), g.nodes.get('submit-score-btn').click()]);
+  await g.nodes.get('submit-score-btn').click();
+  assert.equal(sends, 1);
+  assert.equal(g.nodes.get('result-ranking').children[1].children[1].textContent, '<b>猫</b>');
+  assert.match(g.nodes.get('submission-status').textContent, /1/);
 });
 
-test('invalid saved data cannot break result rendering', () => {
-  for (const value of ['{', '{}', '[null,{}, {"score":-2}, {"score":"3"}]']) {
-    const g = boot({ saved: { luna_neco_ranking_v1: value } });
-    assert.equal(g.run('loadRanking().length'), 0);
-    assert.doesNotThrow(() => g.run("showResult('msg.timeup')"));
+test('a failed score submission can be retried with the same round token', async () => {
+  const bodies = [];
+  const g = boot({ api: { submit: async body => {
+    bodies.push(body);
+    if (bodies.length === 1) throw Error('unavailable');
+    return { entries: [], entry: { rank: 101, name: body.name } };
+  } } });
+  g.run("startGame({seed:1,token:'same-round'}); score=100; showResult('msg.timeup')");
+  await g.nodes.get('submit-score-btn').click();
+  assert.equal(g.nodes.get('submit-score-btn').disabled, false);
+  assert.equal(g.nodes.get('name-entry-container').style.display, 'block');
+  await g.nodes.get('submit-score-btn').click();
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[0].token, bodies[1].token);
+  assert.match(g.nodes.get('submission-status').textContent, /101/);
+});
+
+test('a stale leaderboard response cannot replace the submitted rank', async () => {
+  let complete;
+  const g = boot({ api: { list: () => new Promise(resolve => { complete = resolve; }) } });
+  g.run("startGame({seed:1,token:'test'}); score=100; showResult('msg.timeup')");
+  await g.nodes.get('submit-score-btn').click();
+  complete({ entries: [{ rank: 1, name: 'stale', score: 10 }] });
+  await new Promise(setImmediate);
+  assert.equal(g.nodes.get('result-ranking').children[1].children[1].textContent, '名無し');
+});
+
+test('offline rounds remain playable and are explicitly excluded from national scores', async () => {
+  const g = boot({ storageBlocked: true, api: { begin: async () => { throw Error('offline'); }, list: async () => { throw Error('offline'); } } });
+  await g.run('prepareGame()');
+  assert.equal(g.run('gameState'), 'PLAYING');
+  assert.equal(g.run('roundSession'), null);
+  g.run("score=100; showResult('msg.timeup')");
+  assert.equal(g.nodes.get('name-entry-container').style.display, 'none');
+  assert.match(g.nodes.get('submission-status').textContent, /練習/);
+  await new Promise(setImmediate);
+  assert.match(g.nodes.get('result-ranking').children[1].textContent, /通信/);
+});
+
+test('browser moves match server replay including refills and all special effects', () => {
+  const specialTypes = new Set();
+  for (let seed = 1; seed <= 20; seed++) {
+    const g = boot(); g.run(`startGame({seed:${seed},token:'test'})`);
+    for (let turn = 0; turn < 150; turn++) {
+      g.advance(250);
+      if (g.run('Date.now() - startTime >= 60000 || !!pendingResult')) break;
+      // Prefer special tiles, otherwise the largest connected group.
+      const coords = g.run(`(() => {
+        let best=[0,0], size=0;
+        for (let c=0;c<8;c++) for (let r=0;r<13;r++) {
+          if (grid[c][r].type>=5) return [c,r];
+          const seen=new Set(), stack=[[c,r]], type=grid[c][r].type;
+          while(stack.length) { const [x,y]=stack.pop(), k=x*13+y;
+            if(x<0||x>7||y<0||y>12||seen.has(k)||grid[x][y].type!==type) continue;
+            seen.add(k); stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]); }
+          if(seen.size>size) { best=[c,r]; size=seen.size; }
+        }
+        return best;
+      })()`);
+      const type = g.run(`grid[${coords[0]}][${coords[1]}].type`);
+      if (type >= 5) specialTypes.add(type);
+      g.run(`handleTap(${coords[0]},${coords[1]})`);
+      const replay = g.run('LunaRound.replay(roundSession.seed,roundActions,Date.now()-roundStarted)');
+      assert.equal(replay.score, g.run('score'));
+      assert.equal(JSON.stringify(replay.grid), g.run('JSON.stringify(grid.map(col=>col.map(b=>b.type)))'));
+      assert.equal(replay.deadline, g.run('startTime-roundStarted+60000'));
+    }
   }
-});
-
-test('game remains playable when local storage and Web Audio are unavailable', () => {
-  const g = boot({ storageBlocked: true }); board(g);
-  assert.doesNotThrow(() => g.run("handleTap(0,0); saveScore('猫',100); showResult('msg.timeup')"));
-});
-
-test('legacy rankings are read without requiring DreamCore', () => {
-  const g = boot({ saved: { retro_cafe_ranking: '[30,70]' } });
-  assert.equal(g.run('loadRanking()[0].score'), 70);
-  assert.equal(g.run('loadRanking()[0].name'), '名無し');
+  assert.deepEqual([...specialTypes].sort(), [5,6,7]);
 });
 
 test('language URL overrides browser language and unsupported languages fall back', () => {

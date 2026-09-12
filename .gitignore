@@ -6,3 +6,7 @@ coverage/
 .env
 .env.*
 !.env.example
+.wrangler/
+.dev.vars
+.dev.vars.*
+worker-configuration.d.ts

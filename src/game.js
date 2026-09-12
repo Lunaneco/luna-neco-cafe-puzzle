@@ -208,31 +208,54 @@ const assets = {};
 const blockColors = ['#5c4033', '#ff99c2', '#a2d149', '#80b3ff', '#ffa500', '#ffff00', '#ff00ff'];
 let blockImages = [];
 
-function loadRanking() {
+const leaderboard = new LunaLeaderboard();
+let roundSession = null;
+let roundStarted = 0;
+let roundActions = [];
+let roundElapsed = 0;
+let gameRandom = Math.random;
+let resultVersion = 0;
+let submitting = false;
+let submitted = false;
+let preparing = false;
+let rankingViewVersion = 0;
+
+function rankingError(error) {
+  if (error.message === 'rate_limited') return t('ui.ranking_rate');
+  if (['invalid_score', 'invalid_round'].includes(error.message)) return t('ui.ranking_invalid');
+  if (error.message === 'invalid_name') return t('ui.ranking_name');
+  return t('ui.ranking_error');
+}
+async function refreshRanking(containerId) {
+  const container = document.getElementById(containerId);
+  const version = containerId === 'result-ranking' ? resultVersion : ++rankingViewVersion;
+  renderRanking(containerId, [], t('ui.ranking_loading'));
   try {
-    const data = readStorage('luna_neco_ranking_v1') || readStorage('retro_cafe_ranking_v2') || readStorage('retro_cafe_ranking');
-    const parsed = JSON.parse(data || '[]');
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map(entry => typeof entry === 'number' ? {name: t('ui.anonymous'), score: entry} : entry)
-      .filter(entry => entry && Number.isSafeInteger(entry.score) && entry.score >= 0)
-      .map(entry => ({name: String(entry.name || t('ui.anonymous')).slice(0, 10), score: entry.score}))
-      .sort((a, b) => b.score - a.score).slice(0, 5);
-  } catch(e) {
-    return [];
+    const data = await leaderboard.list();
+    if (version !== (containerId === 'result-ranking' ? resultVersion : rankingViewVersion)) return;
+    renderRanking(containerId, data.entries);
+  } catch (error) {
+    if (version !== (containerId === 'result-ranking' ? resultVersion : rankingViewVersion)) return;
+    renderRanking(containerId, [], rankingError(error));
+    const retry = document.createElement('button');
+    retry.type = 'button'; retry.className = 'small-btn'; retry.textContent = t('ui.refresh');
+    retry.addEventListener('click', () => refreshRanking(containerId));
+    container.append(retry);
   }
 }
-
-function saveScore(name, newScore) {
-  let ranking = loadRanking();
-  if (!Number.isSafeInteger(newScore) || newScore < 0) return ranking;
-  ranking.push({name: String(name).trim().slice(0, 10) || t('ui.anonymous'), score: newScore});
-  ranking.sort((a, b) => b.score - a.score);
-  ranking = ranking.slice(0, 5);
-  writeStorage('luna_neco_ranking_v1', JSON.stringify(ranking));
-  return ranking;
+async function prepareGame() {
+  if (preparing) return;
+  preparing = true;
+  ['start-btn', 'retry-btn', 'ranking-open-btn'].forEach(id => { document.getElementById(id).disabled = true; });
+  document.getElementById('round-status').textContent = t('ui.connecting');
+  let session = null;
+  try { session = await leaderboard.begin(); } catch { /* An offline round remains playable. */ }
+  startGame(session);
+  preparing = false;
+  ['start-btn', 'retry-btn', 'ranking-open-btn'].forEach(id => { document.getElementById(id).disabled = false; });
 }
 
-function renderRanking(containerId, ranking) {
+function renderRanking(containerId, ranking, message = null) {
   const container = document.getElementById(containerId);
   if (!container) return;
   container.replaceChildren();
@@ -243,13 +266,13 @@ function renderRanking(containerId, ranking) {
   if (ranking.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'ranking-empty';
-    empty.textContent = t('ui.nodata');
+    empty.textContent = message || t('ui.nodata');
     container.append(empty);
   } else {
     ranking.forEach((entry, i) => {
       const row = document.createElement('div');
       row.className = 'ranking-item';
-      [String(i + 1) + '.', entry.name, String(entry.score)].forEach(text => {
+      [String(entry.rank || i + 1) + '.', entry.name, String(entry.score)].forEach(text => {
         const span = document.createElement('span');
         span.textContent = text;
         row.append(span);
@@ -269,7 +292,7 @@ function initGrid() {
   for(let c=0; c<COLS; c++){
     grid[c] = [];
     for(let r=0; r<ROWS; r++){
-      let type = Math.floor(Math.random() * 5);
+      let type = Math.floor(gameRandom() * 5);
       grid[c][r] = {
         type: type,
         col: c,
@@ -283,11 +306,23 @@ function initGrid() {
   }
 }
 
-function startGame() {
+function startGame(session = null) {
+  resultVersion++;
+  roundSession = session;
+  roundStarted = Date.now();
+  roundActions = [];
+  roundElapsed = 0;
+  submitted = false;
+  submitting = false;
+  gameRandom = session ? LunaRound.random(session.seed) : Math.random;
+  document.getElementById('round-status').textContent = session ? '' : t('ui.practice');
+  document.getElementById('submit-score-btn').disabled = false;
+  document.getElementById('submit-score-btn').textContent = t('ui.submit');
+  document.getElementById('submission-status').textContent = '';
   stopVoices();
   score = 0;
   timeLeft = 60;
-  startTime = Date.now();
+  startTime = roundStarted;
   scoreMultiplierEndTime = 0;
   timePlusEndTime = 0;
   updateScoreUI();
@@ -309,35 +344,72 @@ function showResult(msgKey) {
   document.getElementById('result-msg').innerText = t(msgKey);
   document.getElementById('result-score').innerText = t('ui.result_score', {score: score});
 
-  const ranking = loadRanking();
-  const isRankIn = ranking.length < 5 || score > (ranking[ranking.length - 1]?.score || 0);
-
-  if (isRankIn && score > 0) {
-    document.getElementById('name-entry-container').style.display = 'block';
-    document.getElementById('result-ranking').style.display = 'none';
-    document.getElementById('retry-btn').style.display = 'none';
-    document.getElementById('name-entry-msg').innerText = t('ui.new_record');
-    document.getElementById('player-name-input').value = '';
-  } else {
-    showRankingMode(ranking);
-  }
-
-  document.getElementById('result-overlay').style.display = 'flex';
-}
-
-function showRankingMode(ranking) {
-  document.getElementById('name-entry-container').style.display = 'none';
+  resultVersion++;
+  roundElapsed = Math.max(0, Date.now() - roundStarted);
+  document.getElementById('round-status').textContent = '';
+  document.getElementById('name-entry-container').style.display = roundSession && score > 0 ? 'block' : 'none';
+  document.getElementById('name-entry-msg').innerText = t('ui.new_record');
+  document.getElementById('player-name-input').value = readStorage('luna_neco_player_name') || '';
+  document.getElementById('submission-status').textContent = roundSession ? '' : t('ui.practice_result');
   document.getElementById('result-ranking').style.display = 'block';
   document.getElementById('retry-btn').style.display = 'inline-block';
-  renderRanking('result-ranking', ranking);
+  document.getElementById('result-overlay').style.display = 'flex';
+  refreshRanking('result-ranking');
 }
 
-document.getElementById('submit-score-btn').addEventListener('click', () => {
-  if (document.getElementById('name-entry-container').style.display === 'none') return;
-  let name = document.getElementById('player-name-input').value.trim();
-  if (!name) name = t('ui.anonymous');
-  const newRanking = saveScore(name, score);
-  showRankingMode(newRanking);
+document.getElementById('submit-score-btn').addEventListener('click', async () => {
+  if (submitting || submitted || !roundSession || score <= 0 || document.getElementById('name-entry-container').style.display === 'none') return;
+  const version = ++resultVersion;
+  const button = document.getElementById('submit-score-btn');
+  const status = document.getElementById('submission-status');
+  const name = document.getElementById('player-name-input').value.trim() || t('ui.anonymous');
+  submitting = true;
+  button.disabled = true;
+  button.textContent = t('ui.submitting');
+  status.textContent = '';
+  document.getElementById('retry-btn').disabled = true;
+  try {
+    const data = await leaderboard.submit({ token: roundSession.token, name, score, actions: roundActions, elapsed: roundElapsed });
+    if (version !== resultVersion) return;
+    submitted = true;
+    writeStorage('luna_neco_player_name', data.entry.name);
+    document.getElementById('name-entry-container').style.display = 'none';
+    status.textContent = t('ui.your_rank', { rank: data.entry.rank });
+    renderRanking('result-ranking', data.entries);
+  } catch (error) {
+    if (version !== resultVersion) return;
+    status.textContent = rankingError(error);
+  } finally {
+    if (version === resultVersion) {
+      submitting = false;
+      button.disabled = false;
+      button.textContent = t('ui.submit');
+      document.getElementById('retry-btn').disabled = false;
+    }
+  }
+});
+
+document.getElementById('ranking-open-btn').textContent = t('ui.ranking_heading');
+document.getElementById('ranking-close-btn').textContent = t('ui.close');
+document.getElementById('ranking-heading').textContent = t('ui.ranking_heading');
+document.getElementById('ranking-refresh-btn').textContent = t('ui.refresh');
+document.getElementById('name-public-note').textContent = t('ui.name_public');
+document.getElementById('ranking-open-btn').addEventListener('click', () => {
+  document.getElementById('start-overlay').inert = true;
+  document.getElementById('ranking-overlay').style.display = 'flex';
+  refreshRanking('national-ranking');
+  document.getElementById('ranking-close-btn').focus();
+});
+function closeRanking() {
+  document.getElementById('start-overlay').inert = false;
+  rankingViewVersion++;
+  document.getElementById('ranking-overlay').style.display = 'none';
+  document.getElementById('ranking-open-btn').focus();
+}
+document.getElementById('ranking-close-btn').addEventListener('click', closeRanking);
+document.getElementById('ranking-refresh-btn').addEventListener('click', () => refreshRanking('national-ranking'));
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && document.getElementById('ranking-overlay').style.display === 'flex') closeRanking();
 });
 
 document.getElementById('player-name-input').addEventListener('keydown', (event) => {
@@ -346,12 +418,12 @@ document.getElementById('player-name-input').addEventListener('keydown', (event)
 
 document.getElementById('start-btn').addEventListener('click', () => {
   audio.init();
-  startGame();
+  prepareGame();
 });
 
 document.getElementById('retry-btn').addEventListener('click', () => {
   audio.init();
-  startGame();
+  prepareGame();
 });
 
 // --- P5.js Main ---
@@ -680,18 +752,20 @@ const game = (p) => {
 
 function handleTap(c, r) {
   if (gameState !== 'PLAYING' || pendingResult || c < 0 || c >= COLS || r < 0 || r >= ROWS) return;
+  const actionNow = Date.now();
   // A delayed frame must not allow extra points or a time bonus after the deadline.
-  if (Date.now() - startTime >= 60000) {
+  if (actionNow - startTime >= 60000) {
     pendingResult = 'timeup';
     return;
   }
   let targetBlock = grid[c][r];
   if (!targetBlock) return;
+  if (roundSession) roundActions.push([c, r, Math.max(0, actionNow - roundStarted)]);
 
   if (targetBlock.type === 5) {
     timeLeft += 10;
     startTime += 10000;
-    timePlusEndTime = Date.now() + 2000;
+    timePlusEndTime = actionNow + 2000;
     updateScoreUI();
     runa1Voice.currentTime = 0;
     playMedia(runa1Voice);
@@ -703,7 +777,7 @@ function handleTap(c, r) {
   }
 
   if (targetBlock.type === 6) {
-    scoreMultiplierEndTime = Date.now() + 20000;
+    scoreMultiplierEndTime = actionNow + 20000;
     tsukinecoVoice.currentTime = 0;
     playMedia(tsukinecoVoice);
     spawnParticles(targetBlock.pixelX + BLOCK_SIZE/2, targetBlock.pixelY + BLOCK_SIZE/2, '#ff00ff');
@@ -732,7 +806,7 @@ function handleTap(c, r) {
 
     let typesArray = Array.from(availableTypes);
     if (typesArray.length > 0) {
-      let targetTypeToChange = typesArray[Math.floor(Math.random() * typesArray.length)];
+      let targetTypeToChange = typesArray[Math.floor(gameRandom() * typesArray.length)];
       for(let x=0; x<COLS; x++){
         for(let y=0; y<ROWS; y++){
           let b = grid[x][y];
@@ -744,7 +818,7 @@ function handleTap(c, r) {
             spawnParticles(b.pixelX + BLOCK_SIZE/2, b.pixelY + BLOCK_SIZE/2, '#ff99c2');
             spawnParticles(b.pixelX + BLOCK_SIZE/2, b.pixelY + BLOCK_SIZE/2, '#ffffff');
             spawnParticles(b.pixelX + BLOCK_SIZE/2, b.pixelY + BLOCK_SIZE/2, '#00ffff');
-            b.highlightEndTime = Date.now() + 2000;
+            b.highlightEndTime = actionNow + 2000;
           }
         }
       }
@@ -776,7 +850,7 @@ function handleTap(c, r) {
 
   if (connected.length >= 2) {
     let pts = connected.length * connected.length * 10;
-    let multiplier = (Date.now() < scoreMultiplierEndTime) ? 2 : 1;
+    let multiplier = (actionNow < scoreMultiplierEndTime) ? 2 : 1;
     score += pts * multiplier;
     updateScoreUI();
 
@@ -837,7 +911,7 @@ function applyGravityAndPack() {
 
     // 上部に新しいブロックを追加
     for (let i = 0; i < missingCount; i++) {
-      let type = Math.floor(Math.random() * 5);
+      let type = Math.floor(gameRandom() * 5);
       let newBlock = {
         type: type,
         col: c,

@@ -7,6 +7,11 @@ const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 createServer(async (request, response) => {
   try {
     const pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
+    if (pathname === '/src/ranking-config.js' && process.env.RANKING_API) {
+      response.writeHead(200, { 'Content-Type': types['.js'], 'Cache-Control': 'no-store' });
+      response.end(`globalThis.LUNA_RANKING_API = ${JSON.stringify(process.env.RANKING_API)};`);
+      return;
+    }
     let path = resolve(root, '.' + pathname);
     if (path !== root && !path.startsWith(root + sep)) {
       response.writeHead(403).end();

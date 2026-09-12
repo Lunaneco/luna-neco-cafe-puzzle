@@ -9,7 +9,7 @@ for (const asset of manifest) {
   assert.equal(data.length, asset.bytes, `${asset.path}: size changed`);
   assert.equal(createHash('sha256').update(data).digest('hex'), asset.sha256, `${asset.path}: hash changed`);
 }
-for (const file of ['index.html', 'src/game.js', 'src/styles.css']) {
+for (const file of ['index.html', 'src/game.js', 'src/round.js', 'src/styles.css']) {
   const text = await readFile(new URL(file, root), 'utf8');
   assert.doesNotMatch(text, /https?:\/\/|DreamCoreSDK|postMessage\(|fetch\(|XMLHttpRequest/, `${file}: external runtime dependency`);
   for (const match of text.matchAll(/(?:\.\/|\.\.\/)(?:assets|src|vendor)\/[\w./-]+/g)) {
@@ -17,4 +17,8 @@ for (const file of ['index.html', 'src/game.js', 'src/styles.css']) {
     await access(url);
   }
 }
+const client = await readFile(new URL('src/leaderboard.js', root), 'utf8');
+assert.doesNotMatch(client, /https?:\/\/|DreamCoreSDK|XMLHttpRequest/, 'Only the configured ranking API is permitted');
+const config = await readFile(new URL('src/ranking-config.js', root), 'utf8');
+assert.match(config, /globalThis\.LUNA_RANKING_API = '(?:https:\/\/[a-z0-9.-]+\.workers\.dev)?';/, 'Invalid ranking API origin');
 console.log(`Verified ${manifest.length} bundled files and all runtime paths.`);

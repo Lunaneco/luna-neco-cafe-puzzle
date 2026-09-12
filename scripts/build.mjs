@@ -8,4 +8,4 @@ await mkdir(output, { recursive: true });
 for (const path of ['index.html', 'src', 'assets', 'vendor', '.nojekyll']) {
   await cp(root + path, new URL(path, output), { recursive: true });
 }
-console.log('Built dist/ — all runtime assets are local.');
+console.log('Built dist/ — bundled assets and shared ranking client ready.');

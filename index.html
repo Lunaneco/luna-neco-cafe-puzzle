@@ -7,10 +7,11 @@
   <meta name="description" content="ルナネコカフェパズル。同じスイーツをつなげて消す、60秒のカフェパズルゲーム。">
   <title>LUNA NECO CAFE PUZZLE</title>
   <link rel="icon" href="./assets/images/paw.png" type="image/png">
-  <link rel="stylesheet" href="./src/styles.css?v=1.0.2">
+  <link rel="stylesheet" href="./src/styles.css?v=1.1.0">
 </head>
 <body>
   <div id="audio-assets" hidden></div>
+  <div id="round-status" role="status" aria-live="polite"></div>
   <button id="sound-btn" type="button" aria-label="音をミュート" aria-pressed="false">♪ ON</button>
   <div id="game-container">
     <div id="ui-layer">
@@ -34,6 +35,16 @@
           <span id="start-btn-text"></span>
         </button>
       </div>
+      <button id="ranking-open-btn" class="small-btn title-ranking" type="button"></button>
+    </div>
+  </div>
+
+  <div id="ranking-overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="ranking-heading" style="display: none;">
+    <div class="panel">
+      <h2 id="ranking-heading"></h2>
+      <div id="national-ranking" class="ranking-container" aria-live="polite"></div>
+      <button id="ranking-refresh-btn" class="small-btn" type="button"></button>
+      <button id="ranking-close-btn" class="small-btn" type="button"></button>
     </div>
   </div>
 
@@ -45,11 +56,12 @@
       <div id="name-entry-container" style="display: none; margin-bottom: 20px;">
         <p id="name-entry-msg" style="color: #5c4033; margin-bottom: 10px; font-size: 20px; font-weight: bold;"></p>
         <input type="text" id="player-name-input" maxlength="10" style="padding: 10px; font-size: 18px; border: 3px solid #5c4033; border-radius: 8px; width: 80%; font-family: 'DotGothic16', sans-serif; text-align: center; margin-bottom: 10px;">
-        <br>
+        <p id="name-public-note" class="ranking-note"></p>
         <button id="submit-score-btn" class="btn" style="padding: 10px 30px; font-size: 20px;"></button>
       </div>
 
-      <div id="result-ranking" class="ranking-container"></div>
+      <p id="submission-status" class="ranking-note" role="status" aria-live="polite"></p>
+      <div id="result-ranking" class="ranking-container" aria-live="polite"></div>
       <button id="retry-btn" class="btn"></button>
     </div>
   </div>
@@ -68,13 +80,27 @@
       "msg.gameover": "手詰まり！",
       "msg.perfect": "パーフェクト！",
       "msg.timeup": "タイムアップ！",
-      "ui.ranking": "ランキング",
+      "ui.ranking": "全国ランキング TOP 100",
       "ui.result_score": "スコア: {score}",
       "ui.nodata": "記録なし",
-      "ui.new_record": "ランクイン！",
-      "ui.submit": "登録",
+      "ui.new_record": "全国ランキングに登録",
+      "ui.submit": "記録を登録",
       "ui.anonymous": "名無し",
-      "ui.enter_name": "名前"
+      "ui.enter_name": "名前",
+      "ui.ranking_loading": "全国の記録を読み込み中…",
+      "ui.ranking_error": "通信できませんでした。もう一度お試しください。",
+      "ui.ranking_rate": "送信が混み合っています。1分ほど待ってお試しください。",
+      "ui.ranking_invalid": "このプレイの記録を確認できませんでした。もう一度プレイしてください。",
+      "ui.ranking_name": "名前は1〜10文字で入力してください。",
+      "ui.refresh": "再読み込み",
+      "ui.connecting": "全国ランキングに接続中…",
+      "ui.practice": "練習プレイ（通信なし・全国記録なし）",
+      "ui.practice_result": "通信できず練習プレイになったため、この記録は全国ランキングに登録されません。",
+      "ui.submitting": "登録中…",
+      "ui.your_rank": "登録完了！ 全国 {rank} 位",
+      "ui.close": "閉じる",
+      "ui.name_public": "名前とスコアは全プレイヤーに公開されます。",
+      "ui.ranking_heading": "全国ランキング"
     },
     "en": {
       "ui.start": "START",
@@ -86,13 +112,27 @@
       "msg.gameover": "NO MORE MOVES!",
       "msg.perfect": "PERFECT!",
       "msg.timeup": "TIME UP!",
-      "ui.ranking": "RANKING",
+      "ui.ranking": "NATIONAL TOP 100",
       "ui.result_score": "SCORE: {score}",
       "ui.nodata": "NO DATA",
-      "ui.new_record": "Rank In!",
-      "ui.submit": "Submit",
+      "ui.new_record": "Join the leaderboard",
+      "ui.submit": "Submit score",
       "ui.anonymous": "Anonymous",
-      "ui.enter_name": "Name"
+      "ui.enter_name": "Name",
+      "ui.ranking_loading": "Loading rankings…",
+      "ui.ranking_error": "Connection failed. Please try again.",
+      "ui.ranking_rate": "Too many requests. Try again in a minute.",
+      "ui.ranking_invalid": "This round could not be verified. Please play again.",
+      "ui.ranking_name": "Enter a name of 1–10 characters.",
+      "ui.refresh": "Refresh",
+      "ui.connecting": "Connecting…",
+      "ui.practice": "Practice (offline, unranked)",
+      "ui.practice_result": "This offline practice round cannot be submitted.",
+      "ui.submitting": "Submitting…",
+      "ui.your_rank": "Saved! Rank #{rank}",
+      "ui.close": "Close",
+      "ui.name_public": "Your name and score will be public.",
+      "ui.ranking_heading": "National ranking"
     },
     "zh": {
       "ui.start": "开始",
@@ -104,13 +144,27 @@
       "msg.gameover": "无路可走！",
       "msg.perfect": "完美！",
       "msg.timeup": "时间到！",
-      "ui.ranking": "排行榜",
+      "ui.ranking": "全国排行榜 TOP 100",
       "ui.result_score": "分数: {score}",
       "ui.nodata": "暂无记录",
-      "ui.new_record": "上榜了！",
-      "ui.submit": "提交",
+      "ui.new_record": "提交全国排行榜",
+      "ui.submit": "提交成绩",
       "ui.anonymous": "无名氏",
-      "ui.enter_name": "名字"
+      "ui.enter_name": "名字",
+      "ui.ranking_loading": "正在加载排行榜…",
+      "ui.ranking_error": "连接失败，请重试。",
+      "ui.ranking_rate": "请求过多，请稍等一分钟再试。",
+      "ui.ranking_invalid": "无法验证此次成绩，请重新游玩。",
+      "ui.ranking_name": "名字请输入1至10个字符。",
+      "ui.refresh": "刷新",
+      "ui.connecting": "正在连接…",
+      "ui.practice": "练习模式（离线，不计排名）",
+      "ui.practice_result": "离线练习成绩无法提交全国排行榜。",
+      "ui.submitting": "提交中…",
+      "ui.your_rank": "已提交！全国第 {rank} 名",
+      "ui.close": "关闭",
+      "ui.name_public": "名字和分数将向所有玩家公开。",
+      "ui.ranking_heading": "全国排行榜"
     },
     "ko": {
       "ui.start": "시작",
@@ -122,13 +176,27 @@
       "msg.gameover": "더 이상 움직일 수 없습니다!",
       "msg.perfect": "퍼펙트!",
       "msg.timeup": "시간 종료!",
-      "ui.ranking": "랭킹",
+      "ui.ranking": "전국 TOP 100",
       "ui.result_score": "점수: {score}",
       "ui.nodata": "기록 없음",
-      "ui.new_record": "랭크 인!",
-      "ui.submit": "등록",
+      "ui.new_record": "전국 랭킹 등록",
+      "ui.submit": "점수 등록",
       "ui.anonymous": "익명",
-      "ui.enter_name": "이름"
+      "ui.enter_name": "이름",
+      "ui.ranking_loading": "랭킹 불러오는 중…",
+      "ui.ranking_error": "연결하지 못했습니다. 다시 시도해 주세요.",
+      "ui.ranking_rate": "요청이 많습니다. 1분 후 다시 시도해 주세요.",
+      "ui.ranking_invalid": "기록을 확인할 수 없습니다. 다시 플레이해 주세요.",
+      "ui.ranking_name": "이름은 1~10자로 입력해 주세요.",
+      "ui.refresh": "새로고침",
+      "ui.connecting": "연결 중…",
+      "ui.practice": "연습 모드 (오프라인, 랭킹 제외)",
+      "ui.practice_result": "오프라인 연습 기록은 전국 랭킹에 등록되지 않습니다.",
+      "ui.submitting": "등록 중…",
+      "ui.your_rank": "등록 완료! 전국 {rank}위",
+      "ui.close": "닫기",
+      "ui.name_public": "이름과 점수는 모든 플레이어에게 공개됩니다.",
+      "ui.ranking_heading": "전국 랭킹"
     },
     "es": {
       "ui.start": "EMPEZAR",
@@ -140,13 +208,27 @@
       "msg.gameover": "¡SIN MOVIMIENTOS!",
       "msg.perfect": "¡PERFECTO!",
       "msg.timeup": "¡TIEMPO AGOTADO!",
-      "ui.ranking": "CLASIFICACIÓN",
+      "ui.ranking": "TOP 100 NACIONAL",
       "ui.result_score": "PUNTUACIÓN: {score}",
       "ui.nodata": "SIN DATOS",
-      "ui.new_record": "¡Nuevo Récord!",
-      "ui.submit": "Enviar",
+      "ui.new_record": "Registrar en la clasificación",
+      "ui.submit": "Enviar puntuación",
       "ui.anonymous": "Anónimo",
-      "ui.enter_name": "Nombre"
+      "ui.enter_name": "Nombre",
+      "ui.ranking_loading": "Cargando clasificación…",
+      "ui.ranking_error": "Error de conexión. Inténtalo de nuevo.",
+      "ui.ranking_rate": "Demasiadas solicitudes. Espera un minuto.",
+      "ui.ranking_invalid": "No se pudo verificar la partida. Juega de nuevo.",
+      "ui.ranking_name": "Introduce un nombre de 1 a 10 caracteres.",
+      "ui.refresh": "Actualizar",
+      "ui.connecting": "Conectando…",
+      "ui.practice": "Práctica sin conexión, sin clasificación",
+      "ui.practice_result": "Esta partida de práctica no se puede registrar.",
+      "ui.submitting": "Enviando…",
+      "ui.your_rank": "¡Guardado! Puesto {rank}",
+      "ui.close": "Cerrar",
+      "ui.name_public": "Tu nombre y puntuación serán públicos.",
+      "ui.ranking_heading": "Clasificación nacional"
     },
     "pt": {
       "ui.start": "COMEÇAR",
@@ -158,19 +240,36 @@
       "msg.gameover": "SEM MOVIMENTOS!",
       "msg.perfect": "PERFEITO!",
       "msg.timeup": "FIM DO TEMPO!",
-      "ui.ranking": "CLASSIFICAÇÃO",
+      "ui.ranking": "TOP 100 NACIONAL",
       "ui.result_score": "PONTUAÇÃO: {score}",
       "ui.nodata": "SEM DADOS",
-      "ui.new_record": "Novo Recorde!",
-      "ui.submit": "Enviar",
+      "ui.new_record": "Entrar na classificação",
+      "ui.submit": "Enviar pontuação",
       "ui.anonymous": "Anônimo",
-      "ui.enter_name": "Nome"
+      "ui.enter_name": "Nome",
+      "ui.ranking_loading": "Carregando classificação…",
+      "ui.ranking_error": "Falha na conexão. Tente novamente.",
+      "ui.ranking_rate": "Muitas solicitações. Aguarde um minuto.",
+      "ui.ranking_invalid": "Não foi possível verificar a partida. Jogue novamente.",
+      "ui.ranking_name": "Digite um nome de 1 a 10 caracteres.",
+      "ui.refresh": "Atualizar",
+      "ui.connecting": "Conectando…",
+      "ui.practice": "Treino offline, sem classificação",
+      "ui.practice_result": "Esta partida de treino não pode ser registrada.",
+      "ui.submitting": "Enviando…",
+      "ui.your_rank": "Salvo! Posição {rank}",
+      "ui.close": "Fechar",
+      "ui.name_public": "Seu nome e sua pontuação serão públicos.",
+      "ui.ranking_heading": "Classificação nacional"
     }
   }
 }
   </script>
   <script src="./vendor/p5.min.js" defer></script>
-  <script src="./src/game.js?v=1.0.2" defer></script>
+  <script src="./src/round.js?v=1.1.0" defer></script>
+  <script src="./src/ranking-config.js?v=1.1.0" defer></script>
+  <script src="./src/leaderboard.js?v=1.1.0" defer></script>
+  <script src="./src/game.js?v=1.1.0" defer></script>
   <noscript>このゲームを遊ぶには JavaScript を有効にしてください。</noscript>
 </body>
 </html>

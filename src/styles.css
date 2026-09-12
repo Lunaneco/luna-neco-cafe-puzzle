@@ -12,7 +12,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid #80b3ff; outline-
 canvas { display: block; touch-action: none; }
 body {
   overflow: hidden;
-  touch-action: none;
+  touch-action: auto;
   font-family: 'DotGothic16', sans-serif;
   background: #000;
 }

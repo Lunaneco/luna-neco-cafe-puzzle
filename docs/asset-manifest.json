@@ -1,0 +1,163 @@
+[
+  {
+    "path": "assets/images/paw.png",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/paw_icon_mmuda5r9.png?v=99ee48ec",
+    "kind": "original",
+    "bytes": 174839,
+    "sha256": "99ee48ec5d3f91031c9fa68f1dd08b9016ff0ebd47ca8db6b9d46ed646f804c3"
+  },
+  {
+    "path": "assets/images/title.jpeg",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/IMG_5474_mmucgwln.jpeg?v=a094295e",
+    "kind": "original",
+    "bytes": 302240,
+    "sha256": "a094295eda86728563e2fc6c030b978a50b1a7f64978919c9827471a9961db13"
+  },
+  {
+    "path": "assets/audio/cafe-bgm.mp3",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/game_ver__short3__mmr13s7m_mmr2w_mmtgas7a.mp3?v=dcf44f29",
+    "kind": "original",
+    "bytes": 887631,
+    "sha256": "dcf44f297dfe06b908c05761ab0392a28f1b2f964b47aef543c48a9517f87f6b"
+  },
+  {
+    "path": "assets/audio/luna.mp3",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/runa1_mmr19h47_mmr2wstn_mmtgaslr.mp3?v=f09416ad",
+    "kind": "original",
+    "bytes": 37539,
+    "sha256": "f09416ad5fabb8f714755b4b72ffa101a394eece2ab27a727c34323ea6bb815c"
+  },
+  {
+    "path": "assets/audio/tsukineco.mp3",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/tsukinecovoice_mmr18xti_mmr2wt7l_mmtgat03.mp3?v=18a42dc0",
+    "kind": "original",
+    "bytes": 22910,
+    "sha256": "18a42dc0c30988d0a06d58bd96fbd54918add96893b29b381f6b6f54bcd3191f"
+  },
+  {
+    "path": "assets/audio/mochi-2.mp3",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/moti2_mmr1jc1f_mmr2wtlq_mmtgatdy.mp3?v=b5a7fa30",
+    "kind": "original",
+    "bytes": 37121,
+    "sha256": "b5a7fa30f09d3c899b53c82a9e0f82dd2d2341c458a29d3940ca8aa8d83c1e96"
+  },
+  {
+    "path": "assets/audio/mochi-3.mp3",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/moti3_mmr1jb8f_mmr2wtzg_mmtgatrx.mp3?v=421b9e5f",
+    "kind": "original",
+    "bytes": 19985,
+    "sha256": "421b9e5fba8cbcfe70197759ab7f7e0ec7c24243bc7a014993d289ae34fe965c"
+  },
+  {
+    "path": "assets/audio/mochi-1.mp3",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/motivoice_mmr1ja17_mmr2wucf_mmtgau67.mp3?v=5f83573e",
+    "kind": "original",
+    "bytes": 18731,
+    "sha256": "5f83573e84597f921b502dafbc8d2158b879e63ec1a716d8bc96aaeff9d73731"
+  },
+  {
+    "path": "assets/audio/mochi-4.mp3",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/moti4_mmr1j9fc_mmr2wupt_mmtgauks.mp3?v=a1a04dde",
+    "kind": "original",
+    "bytes": 29598,
+    "sha256": "a1a04dde7308a2159a07064186a8a17f82d176fdcdff9ea1ad1d2b2f925f5051"
+  },
+  {
+    "path": "assets/images/tile-0.png",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/IMG_5396_mmorw14l_mmovl3e2_mmr2w_mmtgauyo.png?v=dfaa3c66",
+    "kind": "original",
+    "bytes": 7472,
+    "sha256": "dfaa3c66326d87f0504491d03b4b9bfe001b34ac667f7b6a8e99be2004e4bd30"
+  },
+  {
+    "path": "assets/images/tile-1.png",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/IMG_5395_mmorw0nn_mmovl3t6_mmr2w_mmtgavch.png?v=9dc5a559",
+    "kind": "original",
+    "bytes": 8361,
+    "sha256": "9dc5a5598eeb581477f83375a82d6a40b45e58acf9152ddb8f43b26cc86a92aa"
+  },
+  {
+    "path": "assets/images/tile-2.png",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/IMG_5404_mmousxby_mmovl47z_mmr2w_mmtgavqh.png?v=2b589ac9",
+    "kind": "original",
+    "bytes": 9646,
+    "sha256": "2b589ac93a4fe020f83ee744692062067a9f0bc19e074989611a7eafbe8ea0a0"
+  },
+  {
+    "path": "assets/images/tile-3.png",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/IMG_5399_mmorvz82_mmovl4m5_mmr2w_mmtgaw4j.png?v=8ee77d64",
+    "kind": "original",
+    "bytes": 8206,
+    "sha256": "8ee77d64f18b331ba221f00f00c3a16555696463a7c9fe2b6b774d84665121ac"
+  },
+  {
+    "path": "assets/images/tile-4.png",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/IMG_5397_mmorw064_mmovl4zy_mmr2w_mmtgawis.png?v=15423193",
+    "kind": "original",
+    "bytes": 7914,
+    "sha256": "15423193495b5b5625487ce91f35c29350cc6d6b97878f42278a00a06670c1bb"
+  },
+  {
+    "path": "assets/images/luna.png",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/IMG_5424_edited_mmq260u5_mmr2wwz_mmtgawwz.png?v=476e32c3",
+    "kind": "original",
+    "bytes": 162682,
+    "sha256": "476e32c3ef7a3135e664dd2839efe1d88dd49759b65496a57d573be3cb91b1f0"
+  },
+  {
+    "path": "assets/images/tsukineco.png",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/IMG_5423_edited_mmq26ico_mmr2wxd_mmtgaxas.png?v=a21df14d",
+    "kind": "original",
+    "bytes": 151189,
+    "sha256": "a21df14d2d11cf56630a32e33f7209923985afef68d7ce1a7252d35fdeb3e053"
+  },
+  {
+    "path": "assets/images/character-unused.png",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/IMG_5415_edited_mmpkkbrd_mmr2wxq_mmtgaxp2.png?v=ac10153c",
+    "kind": "original",
+    "bytes": 229358,
+    "sha256": "ac10153cebce73e3906d631311049c6683aac90727088c2898b93f366e2f6a8f"
+  },
+  {
+    "path": "assets/images/mochi.png",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/IMG_5422_edited_mmq250sl_mmr2wy4_mmtgay30.png?v=84063237",
+    "kind": "original",
+    "bytes": 269693,
+    "sha256": "8406323755fa04ba910816511a2842316c9c0ba7e10487fdd90f1897d7a52aec"
+  },
+  {
+    "path": "assets/images/cafe-background.jpeg",
+    "source": "https://play.dreamcore.gg/user-assets/d05b68e1-e67a-4c50-bf95-de13a6cc2d95/IMG_5400_mmorvyq2_mmovl5dt_mmr2w_mmtgaygy.png?v=21f6ee4f",
+    "kind": "original",
+    "bytes": 288029,
+    "sha256": "21f6ee4f294316b3792e7f98b3e4bda3eb25f2fb1d7fe20dda5bdf4d4732bdab"
+  },
+  {
+    "path": "vendor/p5.min.js",
+    "source": "https://cdn.jsdelivr.net/npm/p5@1.11.0/lib/p5.min.js",
+    "kind": "dependency",
+    "bytes": 1055007,
+    "sha256": "b6f0ef3dee06b7e7bd1636c3a130b1a76ca75f5cd8a236500161bc117fca327b"
+  },
+  {
+    "path": "vendor/p5-LICENSE.txt",
+    "source": "https://cdn.jsdelivr.net/npm/p5@1.11.0/license.txt",
+    "kind": "license",
+    "bytes": 24480,
+    "sha256": "eb2f25f8f165d5f20682c1ce7e99ce69144ecfd80fbed8c17dfd327ecd8b6cb6"
+  },
+  {
+    "path": "assets/fonts/DotGothic16.ttf",
+    "source": "https://fonts.gstatic.com/s/dotgothic16/v21/v6-QGYjBJFKgyw5nSoDAGE7L.ttf",
+    "kind": "font",
+    "bytes": 1903948,
+    "sha256": "b2c051a7964f18ab7e68c877ef6b8411a1678076e40bed072d89d4ac0eb187ec"
+  },
+  {
+    "path": "assets/fonts/OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/dotgothic16/OFL.txt",
+    "kind": "license",
+    "bytes": 4492,
+    "sha256": "b6630c61ea078cacd7fabe37d14ffe557a0b45b06683374a9aa9e24262993e33"
+  }
+]

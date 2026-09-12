@@ -50,9 +50,27 @@ const motiVoices = [
   new Audio('./assets/audio/mochi-4.mp3')
 ];
 
+let audioAway = document.hidden || !document.hasFocus();
+let soundMuted = readStorage('luna_neco_muted') === 'true';
+function canPlayAudio() {
+  return !audioAway && !soundMuted && !document.hidden && document.hasFocus();
+}
+function playMedia(sound) {
+  if (!canPlayAudio()) return;
+  sound.play().then(() => {
+    // A pending play request may finish after the user leaves the page.
+    if (!canPlayAudio()) sound.pause();
+  }).catch(() => {});
+}
+
 class SynthAudio {
-  constructor() { this.ctx = null; }
+  constructor() {
+    this.ctx = null;
+    this.voices = new Set();
+    this.timers = new Set();
+  }
   init() {
+    if (!canPlayAudio()) return;
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return;
@@ -61,8 +79,9 @@ class SynthAudio {
     } catch { this.ctx = null; }
   }
   play(freq, endFreq, duration, type = 'square', vol = 0.2) {
+    if (!canPlayAudio()) return;
     this.init();
-    if (!this.ctx || soundMuted) return;
+    if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = type;
@@ -72,6 +91,13 @@ class SynthAudio {
     osc.frequency.exponentialRampToValueAtTime(endFreq, this.ctx.currentTime + duration);
     gain.gain.setValueAtTime(vol, this.ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+    const voice = { osc, gain };
+    this.voices.add(voice);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+      this.voices.delete(voice);
+    };
     osc.start();
     osc.stop(this.ctx.currentTime + duration);
   }
@@ -80,20 +106,35 @@ class SynthAudio {
     this.play(baseFreq, baseFreq * 1.5, 0.1, 'sine', 0.2);
   }
   playClear() {
+    if (!canPlayAudio()) return;
     [523, 659, 784, 1046].forEach((f, i) => {
-      setTimeout(() => this.play(f, f, 0.2, 'square', 0.1), i * 100);
+      const timer = setTimeout(() => {
+        this.timers.delete(timer);
+        this.play(f, f, 0.2, 'square', 0.1);
+      }, i * 100);
+      this.timers.add(timer);
     });
   }
   playOver() {
     this.play(300, 150, 0.5, 'sawtooth', 0.2);
   }
+  stop() {
+    this.timers.forEach(timer => clearTimeout(timer));
+    this.timers.clear();
+    for (const { osc, gain } of this.voices) {
+      // Disconnect immediately; suspension alone would replay the tail on return.
+      gain.disconnect();
+      try { osc.stop(); } catch { /* Already ended. */ }
+    }
+    this.voices.clear();
+    if (this.ctx && this.ctx.state !== 'closed') this.ctx.suspend().catch(() => {});
+  }
 }
 const audio = new SynthAudio();
-document.addEventListener('pointerdown', () => audio.init(), { once: true });
 const media = [bgm, runa1Voice, tsukinecoVoice, ...motiVoices];
-let soundMuted = readStorage('luna_neco_muted') === 'true';
+media.forEach(sound => document.getElementById('audio-assets').append(sound));
 function updateSound() {
-  media.forEach(sound => { sound.muted = soundMuted; });
+  media.forEach(sound => { sound.muted = !canPlayAudio(); });
   const button = document.getElementById('sound-btn');
   button.textContent = soundMuted ? '♪ OFF' : '♪ ON';
   button.setAttribute('aria-pressed', String(soundMuted));
@@ -103,11 +144,46 @@ document.getElementById('sound-btn').addEventListener('click', () => {
   soundMuted = !soundMuted;
   writeStorage('luna_neco_muted', String(soundMuted));
   updateSound();
+  if (soundMuted) silenceAudio();
+  else restoreAudio();
 });
 updateSound();
 function stopVoices() {
   media.slice(1).forEach(sound => { sound.pause(); sound.currentTime = 0; });
 }
+function silenceAudio() {
+  media.forEach(sound => { sound.pause(); });
+  stopVoices();
+  audio.stop();
+}
+function leavePage() {
+  audioAway = true;
+  updateSound();
+  silenceAudio();
+}
+function restoreAudio() {
+  if (document.hidden || !document.hasFocus()) return;
+  audioAway = false;
+  updateSound();
+  if (!canPlayAudio()) return;
+  if (audio.ctx) audio.init();
+  // Do not restart voices, effects, or a round that expired while away.
+  if (gameState === 'PLAYING' && !pendingResult && Date.now() - startTime < 60000 && bgm.paused) {
+    playMedia(bgm);
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) leavePage();
+  else restoreAudio();
+});
+window.addEventListener('blur', leavePage);
+window.addEventListener('pagehide', leavePage);
+window.addEventListener('focus', restoreAudio);
+window.addEventListener('pageshow', restoreAudio);
+document.addEventListener('pointerdown', () => {
+  restoreAudio();
+  audio.init();
+});
 
 // --- Game Constants & State ---
 const VIRTUAL_WIDTH = 390;
@@ -224,7 +300,7 @@ function startGame() {
   document.getElementById('start-overlay').style.display = 'none';
   document.getElementById('result-overlay').style.display = 'none';
   bgm.currentTime = 0;
-  bgm.play().catch(e => console.warn("BGM play failed:", e));
+  playMedia(bgm);
 }
 
 function showResult(msgKey) {
@@ -350,7 +426,8 @@ const game = (p) => {
   function calculateScale() {
     const scaleX = p.windowWidth / VIRTUAL_WIDTH;
     const scaleY = p.windowHeight / VIRTUAL_HEIGHT;
-    scale = Math.min(scaleX, scaleY);
+    // 390 × 844 is 100%. Shrink uniformly when needed, never auto-enlarge.
+    scale = Math.min(1, scaleX, scaleY);
     offsetX = (p.windowWidth - VIRTUAL_WIDTH * scale) / 2;
     offsetY = (p.windowHeight - VIRTUAL_HEIGHT * scale) / 2;
 
@@ -602,7 +679,7 @@ function handleTap(c, r) {
     timePlusEndTime = Date.now() + 2000;
     updateScoreUI();
     runa1Voice.currentTime = 0;
-    runa1Voice.play().catch(e => console.warn(e));
+    playMedia(runa1Voice);
     spawnParticles(targetBlock.pixelX + BLOCK_SIZE/2, targetBlock.pixelY + BLOCK_SIZE/2, '#ffff00');
     grid[c][r] = null;
     applyGravityAndPack();
@@ -613,7 +690,7 @@ function handleTap(c, r) {
   if (targetBlock.type === 6) {
     scoreMultiplierEndTime = Date.now() + 20000;
     tsukinecoVoice.currentTime = 0;
-    tsukinecoVoice.play().catch(e => console.warn(e));
+    playMedia(tsukinecoVoice);
     spawnParticles(targetBlock.pixelX + BLOCK_SIZE/2, targetBlock.pixelY + BLOCK_SIZE/2, '#ff00ff');
     grid[c][r] = null;
     applyGravityAndPack();
@@ -624,7 +701,7 @@ function handleTap(c, r) {
   if (targetBlock.type === 7) {
     const v = motiVoices[Math.floor(Math.random() * motiVoices.length)];
     v.currentTime = 0;
-    v.play().catch(e => console.warn(e));
+    playMedia(v);
     spawnParticles(targetBlock.pixelX + BLOCK_SIZE/2, targetBlock.pixelY + BLOCK_SIZE/2, '#00ffff');
     grid[c][r] = null;
 

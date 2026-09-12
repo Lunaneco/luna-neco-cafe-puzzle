@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio focus smoke test</title>
+<style>body{margin:0;background:#eee;font:16px sans-serif}header{padding:12px;display:flex;gap:20px;align-items:center}button{padding:12px}iframe{border:0;width:100%;height:calc(100vh - 84px)}output{white-space:pre-wrap}</style>
+<header>
+  <button type="button">ゲームからフォーカスを外す</button>
+  <output id="status">読み込み中</output>
+</header>
+<iframe title="テスト用ゲーム" src="../index.html"></iframe>
+<script>
+// Local manual fixture. Excluded from the production build.
+const frame=document.querySelector('iframe');
+function report() {
+  const doc=frame.contentDocument;
+  const sounds=Array.from(doc?.querySelectorAll('audio') || []);
+  document.getElementById('status').textContent = `再生中: ${sounds.filter(sound=>!sound.paused).length} / ${sounds.length}\n全音源ミュート: ${sounds.length > 0 && sounds.every(sound=>sound.muted)}\nBGM再生位置: ${(sounds[0]?.currentTime || 0).toFixed(2)}秒`;
+}
+frame.addEventListener('load',report);
+setInterval(report,200);
+</script>
+</html>

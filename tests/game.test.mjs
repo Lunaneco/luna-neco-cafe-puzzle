@@ -6,9 +6,18 @@ import vm from 'node:vm';
 const source = readFileSync(new URL('../src/game.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const translations = html.match(/<script id="ui-texts" type="application\/json">([\s\S]*?)<\/script>/)[1];
-function boot({ storageBlocked = false, saved = {}, language = 'ja', search = '' } = {}) {
+function boot({ storageBlocked = false, saved = {}, language = 'ja', search = '', webAudio = false, deferredMedia = false } = {}) {
   const nodes = new Map();
   const stored = new Map(Object.entries(saved));
+  const listeners = { document: new Map(), window: new Map() };
+  const addListener = target => (event, callback) => {
+    if (!listeners[target].has(event)) listeners[target].set(event, []);
+    listeners[target].get(event).push(callback);
+  };
+  let focused = true;
+  const timers = new Map();
+  let timerId = 0;
+  const playingRequests = [];
   const makeNode = () => ({
     style: {}, value: '', textContent: '', innerText: '', children: [], attrs: {}, handlers: {},
     append(child) { this.children.push(child); },
@@ -18,33 +27,72 @@ function boot({ storageBlocked = false, saved = {}, language = 'ja', search = ''
     click() { this.handlers.click?.({}); },
   });
   const document = {
+    hidden: false,
+    hasFocus: () => focused,
     documentElement: {},
     getElementById(id) {
       if (!nodes.has(id)) nodes.set(id, makeNode());
       return nodes.get(id);
     },
     createElement: makeNode,
-    addEventListener() {},
+    addEventListener: addListener('document'),
   };
   document.getElementById('ui-texts').textContent = translations;
   let now = 1_000_000;
-  const p = new Proxy({ color: () => ({ setAlpha() {} }) }, {
+  const drawScales = [];
+  const p = new Proxy({
+    windowWidth: 390, windowHeight: 844,
+    color: () => ({ setAlpha() {} }),
+    scale: value => drawScales.push(value),
+    createCanvas: () => ({ parent() {}, elt: { addEventListener() {} } }),
+  }, {
     get(target, key) { return target[key] ?? (() => {}); },
   });
   const context = vm.createContext({
-    document, URLSearchParams, location: { search }, navigator: { language }, window: {}, console,
+    document, URLSearchParams, location: { search }, navigator: { language },
+    window: {
+      addEventListener: addListener('window'),
+      AudioContext: webAudio ? class {
+        state = 'running'; currentTime = 0; destination = {};
+        suspend() { this.state = 'suspended'; return Promise.resolve(); }
+        resume() { this.state = 'running'; return Promise.resolve(); }
+        createOscillator() {
+          return {
+            frequency: { setValueAtTime() {}, exponentialRampToValueAtTime() {} },
+            connect() {}, disconnect() {}, start() {}, stop() {},
+          };
+        }
+        createGain() {
+          return { connect() {}, disconnect() {}, gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} } };
+        }
+      } : undefined,
+    }, console,
     Date: class extends Date { static now() { return now; } },
     localStorage: {
       getItem(key) { if (storageBlocked) throw Error('Storage unavailable'); return stored.get(key) ?? null; },
       setItem(key, value) { if (storageBlocked) throw Error('Storage unavailable'); stored.set(key, value); },
     },
-    Audio: class { currentTime = 0; paused = true; play() { this.paused = false; return Promise.resolve(); } pause() { this.paused = true; } },
+    Audio: class {
+      currentTime = 0; paused = true;
+      play() {
+        if (deferredMedia) return new Promise(resolve => playingRequests.push(() => { this.paused = false; resolve(); }));
+        this.paused = false;
+        return Promise.resolve();
+      }
+      pause() { this.paused = true; }
+    },
     p5: function (sketch) { sketch(p); },
-    setTimeout: () => {},
+    setTimeout(callback) { timers.set(++timerId, callback); return timerId; },
+    clearTimeout: id => timers.delete(id),
   });
   const run = script => vm.runInContext(script, context);
   run(source);
-  return { run, nodes, stored, p, advance: milliseconds => { now += milliseconds; } };
+  return {
+    run, nodes, stored, p, document, timers, playingRequests, drawScales,
+    focus: value => { focused = value; },
+    emit: (target, event) => listeners[target].get(event)?.forEach(callback => callback()),
+    advance: milliseconds => { now += milliseconds; },
+  };
 }
 function board(game, type = 0) {
   game.run(`startGame(); grid.flat().forEach(b => { b.type = ${type}; b.pixelX = b.targetX; b.pixelY = b.targetY; });`);
@@ -192,5 +240,91 @@ test('language URL overrides browser language and unsupported languages fall bac
   assert.equal(boot({ language: 'fr' }).run("t('ui.start')"), 'スタート');
   for (const lang of ['ja','en','zh','ko','es','pt']) {
     assert.notEqual(boot({ search: `?lang=${lang}` }).run("t('msg.timeup')"), 'msg.timeup');
+  }
+});
+
+test('tab hiding stops all media, active synth effects, and scheduled sounds', () => {
+  const g = boot({ webAudio: true }); board(g);
+  g.run('playMedia(runa1Voice); audio.playPop(3); audio.playClear()');
+  assert.equal(g.run('bgm.paused'), false);
+  assert.equal(g.run('audio.voices.size'), 1);
+  assert.equal(g.timers.size, 4);
+  g.document.hidden = true;
+  g.emit('document', 'visibilitychange');
+  assert.ok(g.run('media.every(sound => sound.paused && sound.muted)'));
+  assert.equal(g.run('audio.ctx.state'), 'suspended');
+  assert.equal(g.run('audio.voices.size'), 0);
+  assert.equal(g.timers.size, 0);
+  g.run('audio.playOver(); playMedia(tsukinecoVoice)');
+  assert.equal(g.run('audio.voices.size'), 0);
+  assert.ok(g.run('media.every(sound => sound.paused)'));
+});
+
+test('leaving the browser window silences audio even while the page is visible', () => {
+  const g = boot(); board(g);
+  g.focus(false);
+  g.emit('window', 'blur');
+  assert.equal(g.document.hidden, false);
+  assert.equal(g.run('bgm.paused'), true);
+  g.focus(true);
+  g.emit('window', 'focus');
+  assert.equal(g.run('bgm.paused'), false);
+  assert.ok(g.run('media.slice(1).every(sound => sound.paused)'));
+});
+
+test('visibility and focus events resume BGM only when both are active', () => {
+  const g = boot(); board(g);
+  g.run('bgm.currentTime=12; playMedia(runa1Voice)');
+  g.focus(false);
+  g.document.hidden = true;
+  g.emit('window', 'blur');
+  g.emit('document', 'visibilitychange');
+  g.document.hidden = false;
+  g.emit('document', 'visibilitychange');
+  assert.equal(g.run('bgm.paused'), true);
+  g.focus(true);
+  g.emit('window', 'focus');
+  assert.equal(g.run('bgm.paused'), false);
+  assert.equal(g.run('bgm.currentTime'), 12);
+  assert.equal(g.run('runa1Voice.paused'), true);
+});
+
+test('pagehide stops audio and pageshow preserves a saved mute setting', () => {
+  const g = boot(); board(g);
+  g.emit('window', 'pagehide');
+  assert.ok(g.run('media.every(sound => sound.paused)'));
+  g.nodes.get('sound-btn').click();
+  g.emit('window', 'pageshow');
+  assert.ok(g.run('media.every(sound => sound.paused && sound.muted)'));
+  assert.equal(g.stored.get('luna_neco_muted'), 'true');
+});
+
+test('returning after the round expired cannot restart BGM', () => {
+  const g = boot(); board(g);
+  g.emit('window', 'pagehide');
+  g.advance(61000);
+  g.emit('window', 'pageshow');
+  assert.equal(g.run('bgm.paused'), true);
+});
+
+test('a delayed media play completion cannot leak sound after leaving', async () => {
+  const g = boot({ deferredMedia: true }); board(g);
+  assert.equal(g.playingRequests.length, 1);
+  g.emit('window', 'blur');
+  g.playingRequests[0]();
+  await Promise.resolve();
+  assert.equal(g.run('bgm.paused'), true);
+});
+
+test('large screens use 100% scale, with a single uniform shrink on small screens', () => {
+  const g = boot();
+  for (const [width, height, scale] of [[1440,1100,1], [390,844,1], [320,568,568/844], [844,390,390/844]]) {
+    g.p.windowWidth = width;
+    g.p.windowHeight = height;
+    g.p.setup();
+    g.drawScales.length = 0;
+    g.p.draw();
+    assert.equal(g.drawScales[0], scale);
+    assert.match(g.nodes.get('ui-layer').style.transform, new RegExp(`scale\\(${String(scale).replace('.', '\\.')}\\)`));
   }
 });

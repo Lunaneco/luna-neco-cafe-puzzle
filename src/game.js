@@ -357,6 +357,14 @@ document.getElementById('retry-btn').addEventListener('click', () => {
 // --- P5.js Main ---
 const game = (p) => {
   let scale = 1, offsetX = 0, offsetY = 0;
+  const container = document.getElementById('game-container');
+  function viewportSize() {
+    // The content box excludes phone cutouts and follows the visible browser height.
+    return {
+      width: container.clientWidth || p.windowWidth,
+      height: container.clientHeight || p.windowHeight,
+    };
+  }
 
   p.preload = () => {
     let loadedCount = 0;
@@ -388,11 +396,15 @@ const game = (p) => {
   };
 
   p.setup = () => {
-    const canvas = p.createCanvas(p.windowWidth, p.windowHeight);
+    const { width, height } = viewportSize();
+    const canvas = p.createCanvas(width, height);
     canvas.parent('game-container');
     p.imageMode(p.CENTER);
     updateScoreUI();
     calculateScale();
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(resizeGame).observe(container);
+    }
 
     // 確実なタッチ・クリックイベントの登録
     canvas.elt.addEventListener('pointerdown', (e) => {
@@ -424,12 +436,13 @@ const game = (p) => {
   };
 
   function calculateScale() {
-    const scaleX = p.windowWidth / VIRTUAL_WIDTH;
-    const scaleY = p.windowHeight / VIRTUAL_HEIGHT;
-    // 390 × 844 is 100%. Shrink uniformly when needed, never auto-enlarge.
-    scale = Math.min(1, scaleX, scaleY);
-    offsetX = (p.windowWidth - VIRTUAL_WIDTH * scale) / 2;
-    offsetY = (p.windowHeight - VIRTUAL_HEIGHT * scale) / 2;
+    const { width, height } = viewportSize();
+    const scaleX = width / VIRTUAL_WIDTH;
+    const scaleY = height / VIRTUAL_HEIGHT;
+    // Use one scale for both axes: contain the complete 390 × 844 board.
+    scale = Math.min(scaleX, scaleY);
+    offsetX = (width - VIRTUAL_WIDTH * scale) / 2;
+    offsetY = (height - VIRTUAL_HEIGHT * scale) / 2;
 
     const uiLayer = document.getElementById('ui-layer');
     if (uiLayer) {
@@ -657,10 +670,12 @@ const game = (p) => {
     }
   }
 
-  p.windowResized = () => {
-    p.resizeCanvas(p.windowWidth, p.windowHeight);
+  function resizeGame() {
+    const { width, height } = viewportSize();
+    if (p.width !== width || p.height !== height) p.resizeCanvas(width, height);
     calculateScale();
-  };
+  }
+  p.windowResized = resizeGame;
 };
 
 function handleTap(c, r) {

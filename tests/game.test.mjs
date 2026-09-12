@@ -316,9 +316,9 @@ test('a delayed media play completion cannot leak sound after leaving', async ()
   assert.equal(g.run('bgm.paused'), true);
 });
 
-test('large screens use 100% scale, with a single uniform shrink on small screens', () => {
+test('the full board fits each screen using one uniform scale, including larger phones', () => {
   const g = boot();
-  for (const [width, height, scale] of [[1440,1100,1], [390,844,1], [320,568,568/844], [844,390,390/844]]) {
+  for (const [width, height, scale] of [[1440,1100,1100/844], [430,932,430/390], [390,844,1], [320,568,568/844], [844,390,390/844]]) {
     g.p.windowWidth = width;
     g.p.windowHeight = height;
     g.p.setup();
@@ -326,5 +326,27 @@ test('large screens use 100% scale, with a single uniform shrink on small screen
     g.p.draw();
     assert.equal(g.drawScales[0], scale);
     assert.match(g.nodes.get('ui-layer').style.transform, new RegExp(`scale\\(${String(scale).replace('.', '\\.')}\\)`));
+  }
+});
+
+test('canvas and HUD use the safe content area and follow browser-bar resizing', () => {
+  const g = boot();
+  g.p.windowWidth = 430;
+  g.p.windowHeight = 932;
+  const container = g.nodes.get('game-container');
+  const canvasSizes = [];
+  g.p.resizeCanvas = (width, height) => canvasSizes.push([width, height]);
+  for (const [width, height] of [[430,851], [430,751], [760,369]]) {
+    container.clientWidth = width;
+    container.clientHeight = height;
+    g.p.windowResized();
+    g.drawScales.length = 0;
+    g.p.draw();
+    const scale = g.drawScales[0];
+    assert.ok(390 * scale <= width + 0.001);
+    assert.ok(844 * scale <= height + 0.001);
+    assert.ok(Math.abs(390 * scale - width) < 0.001 || Math.abs(844 * scale - height) < 0.001);
+    assert.deepEqual(canvasSizes.at(-1), [width, height]);
+    assert.equal(g.nodes.get('ui-layer').style.left, width / 2 + 'px');
   }
 });

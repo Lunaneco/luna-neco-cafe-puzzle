@@ -1,6 +1,6 @@
 {
   "name": "luna-neco-cafe-puzzle",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Standalone LUNA NECO CAFE PUZZLE, with all original images and audio bundled locally.",
   "type": "module",

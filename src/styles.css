@@ -6,11 +6,25 @@
   src: url('../assets/fonts/DotGothic16.ttf') format('truetype');
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --viewport-height: 100vh;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --screen-width: calc(100vw - var(--safe-left) - var(--safe-right));
+  --screen-height: calc(var(--viewport-height) - var(--safe-top) - var(--safe-bottom));
+}
+@supports (height: 100dvh) {
+  :root { --viewport-height: 100dvh; }
+}
 html, body { width: 100%; height: 100%; overscroll-behavior: none; }
 button { touch-action: manipulation; }
 button:focus-visible, input:focus-visible { outline: 3px solid #80b3ff; outline-offset: 4px; }
 canvas { display: block; touch-action: none; }
 body {
+  height: var(--viewport-height);
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
   overflow: hidden;
   touch-action: auto;
   font-family: 'DotGothic16', sans-serif;
@@ -20,8 +34,7 @@ body {
 #game-container {
   position: relative;
   width: 100%;
-  height: 100vh;
-  height: 100dvh;
+  height: 100%;
   background: #000;
 }
 
@@ -67,7 +80,7 @@ body {
 
 .overlay {
   position: fixed;
-  inset: 0;
+  inset: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
   background: rgba(0,0,0,0.7);
   display: flex;
   flex-direction: column;
@@ -78,8 +91,8 @@ body {
 }
 
 .panel {
-  width: min(360px, calc(100vw - 24px));
-  max-height: calc(100dvh - 32px);
+  width: min(360px, calc(var(--screen-width) - 24px));
+  max-height: calc(var(--screen-height) - 32px);
   overflow-y: auto;
   touch-action: pan-y;
   background: #f8edeb;
@@ -160,8 +173,7 @@ body {
 .title-art {
   position: relative;
   flex: none;
-  width: min(390px, 100vw, calc(100vh * 1050 / 1690));
-  width: min(390px, 100vw, calc(100dvh * 1050 / 1690));
+  width: min(var(--screen-width), calc(var(--screen-height) * 1050 / 1690));
   aspect-ratio: 1050 / 1690;
 }
 #start-img { display: block; width: 100%; height: 100%; object-fit: contain; }

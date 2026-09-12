@@ -2,6 +2,32 @@ import '../src/round.js';
 
 const encoder = new TextEncoder();
 const MAX_AGE = 24 * 60 * 60 * 1000;
+const loopback = hostname => ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
+function validOrigin(value) {
+  try {
+    const url = new URL(value);
+    return url.origin === value && (url.protocol === 'https:' || (url.protocol === 'http:' && loopback(url.hostname)));
+  } catch { return false; }
+}
+async function readJSON(request, maxBytes) {
+  const fail = (code, status) => { throw Object.assign(Error(code), { status }); };
+  if (request.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase() !== 'application/json') fail('invalid_request', 415);
+  if (Number(request.headers.get('Content-Length')) > maxBytes) fail('too_large', 413);
+  const reader = request.body?.getReader();
+  if (!reader) fail('invalid_request', 400);
+  let bytes = 0, text = ''; const decoder = new TextDecoder();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytes += value.length;
+    if (bytes > maxBytes) { await reader.cancel(); fail('too_large', 413); }
+    text += decoder.decode(value, { stream: true });
+  }
+  let body;
+  try { body = JSON.parse(text + decoder.decode()); } catch { fail('invalid_request', 400); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) fail('invalid_request', 400);
+  return body;
+}
 const encode = value => btoa(String.fromCharCode(...value)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
 const decode = value => Uint8Array.from(atob(value.replaceAll('-', '+').replaceAll('_', '/')), c => c.charCodeAt(0));
 async function signingKey(secret) {
@@ -20,7 +46,9 @@ async function verifyToken(token, secret, now) {
     const parts = token.split('.');
     if (parts.length !== 2 || !await crypto.subtle.verify('HMAC', await signingKey(secret), decode(parts[1]), encoder.encode(parts[0]))) throw Error();
     const round = JSON.parse(new TextDecoder().decode(decode(parts[0])));
-    if (round.version !== 1 || now < round.issued || now - round.issued > MAX_AGE) throw Error();
+    if (round.version !== 1 || !Number.isSafeInteger(round.issued) ||
+        !Number.isInteger(round.seed) || round.seed < 0 || round.seed > 0xffffffff ||
+        !/^[a-f0-9-]{36}$/.test(round.id) || now < round.issued || now - round.issued > MAX_AGE) throw Error();
     return round;
   } catch { throw Object.assign(Error('invalid_round'), { status: 400 }); }
 }
@@ -50,40 +78,49 @@ export default {
     const headers = {
       'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff', 'Vary': 'Origin',
+      'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
+      'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer',
+      'Strict-Transport-Security': 'max-age=31536000',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
       ...(corsOrigin ? { 'Access-Control-Allow-Origin': corsOrigin } : {}),
     };
-    const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers });
-    if (origin && !corsOrigin) return json({ error: 'origin_denied' }, 403);
-    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: {
-      ...headers, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '600',
+    const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: {
+      ...headers, ...(status === 429 ? { 'Retry-After': '60' } : {}),
     } });
+    const url = new URL(request.url);
+    if (url.protocol !== 'https:' && !loopback(url.hostname)) return json({ error: 'https_required' }, 403);
+    if (!allowed.length || !allowed.every(validOrigin)) return json({ error: 'unavailable' }, 503);
+    if (origin && !corsOrigin) return json({ error: 'origin_denied' }, 403);
+    const expectedMethod = { '/api/leaderboard': 'GET', '/api/rounds': 'POST', '/api/scores': 'POST' }[url.pathname];
+    if (!expectedMethod) return json({ error: 'not_found' }, 404);
+    if (request.method === 'OPTIONS') {
+      const requestedHeaders = (request.headers.get('Access-Control-Request-Headers') || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+      if (!corsOrigin || request.headers.get('Access-Control-Request-Method') !== expectedMethod ||
+          requestedHeaders.some(name => name !== 'content-type')) return json({ error: 'origin_denied' }, 403);
+      return new Response(null, { status: 204, headers: {
+        ...headers, 'Access-Control-Allow-Methods': expectedMethod,
+        'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '600',
+      } });
+    }
+    if (request.method !== expectedMethod) return json({ error: 'method_not_allowed' }, 405);
+    if (expectedMethod === 'POST' && !corsOrigin) return json({ error: 'origin_denied' }, 403);
     try {
-      const path = new URL(request.url).pathname;
-      if (!env.DB || !env.ROUND_SECRET) return json({ error: 'unavailable' }, 503);
-      if (path === '/api/leaderboard' && request.method === 'GET') return json(await ranking(env.DB));
-      if (request.method !== 'POST' || !['/api/rounds', '/api/scores'].includes(path)) return json({ error: 'not_found' }, 404);
+      const path = url.pathname;
+      // Misconfiguration must not silently disable security controls.
+      if (!env.DB || !/^[a-f0-9]{64}$/i.test(env.ROUND_SECRET || '') ||
+          typeof env.WRITE_LIMITER?.limit !== 'function' || typeof env.READ_LIMITER?.limit !== 'function') return json({ error: 'unavailable' }, 503);
       // CORS is not authentication. Per-IP limits also apply to non-browser clients.
-      if (env.WRITE_LIMITER) {
-        const key = request.headers.get('CF-Connecting-IP') || 'unknown';
-        if (!(await env.WRITE_LIMITER.limit({ key })).success) return json({ error: 'rate_limited' }, 429);
+      const ip = request.headers.get('CF-Connecting-IP');
+      if (!ip) return json({ error: 'unavailable' }, 503);
+      const limiter = expectedMethod === 'GET' ? env.READ_LIMITER : env.WRITE_LIMITER;
+      if (!(await limiter.limit({ key: 'luna-neco-ranking:' + ip })).success) return json({ error: 'rate_limited' }, 429);
+      if (path === '/api/leaderboard') return json(await ranking(env.DB));
+      if (path === '/api/rounds') {
+        const body = await readJSON(request, 1024);
+        if (Object.keys(body).length) return json({ error: 'invalid_request' }, 400);
+        return json(await issueRound(env.ROUND_SECRET, Date.now()), 201);
       }
-      if (path === '/api/rounds') return json(await issueRound(env.ROUND_SECRET, Date.now()), 201);
-      if (!request.headers.get('Content-Type')?.startsWith('application/json')) return json({ error: 'invalid_request' }, 415);
-      if (Number(request.headers.get('Content-Length')) > 200000) return json({ error: 'too_large' }, 413);
-      const reader = request.body?.getReader();
-      if (!reader) return json({ error: 'invalid_request' }, 400);
-      let bytes = 0, text = ''; const decoder = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        bytes += value.length;
-        if (bytes > 200000) { await reader.cancel(); return json({ error: 'too_large' }, 413); }
-        text += decoder.decode(value, { stream: true });
-      }
-      let body;
-      try { body = JSON.parse(text + decoder.decode()); } catch { return json({ error: 'invalid_request' }, 400); }
-      if (!body || typeof body !== 'object') return json({ error: 'invalid_request' }, 400);
+      const body = await readJSON(request, 200000);
       const round = await verifyToken(body.token, env.ROUND_SECRET, Date.now());
       const name = validateName(body.name);
       let verified;
@@ -96,7 +133,8 @@ export default {
       return json(await ranking(env.DB, round.id));
     } catch (error) {
       if (error.status) return json({ error: error.message }, error.status);
-      console.error('Leaderboard request failed');
+      // Never log tokens, names, IPs, request bodies, or database exception text.
+      console.error({ event: 'leaderboard_unavailable' });
       return json({ error: 'unavailable' }, 503);
     }
   },

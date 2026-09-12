@@ -8,7 +8,7 @@ globalThis.LunaLeaderboard = class {
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
       const response = await fetch(this.base + path, {
-        method: body ? 'POST' : 'GET', signal: controller.signal, credentials: 'omit', cache: 'no-store',
+        method: body ? 'POST' : 'GET', signal: controller.signal, credentials: 'omit', cache: 'no-store', redirect: 'error',
         ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
       });
       const data = await response.json();
